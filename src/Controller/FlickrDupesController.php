@@ -79,16 +79,21 @@ class FlickrDupesController extends ControllerBase
         }
         // This gets *all* tags, which might sound inefficient but there doesn't seem to be a way to page through them.
         $cache = new FilesystemAdapter('app.cache');
-        $tags = $cache->get('flickr-tags', function (ItemInterface $item) use ($flickr) {
+        $cacheKey = 'flickr-tags';
+        $tags = $cache->get($cacheKey, function (ItemInterface $item) use ($flickr) {
             $item->expiresAfter(60 * 30);
-            return $flickr->getFlickr()->tags_getListUser();
+            $tags = $flickr->getFlickr()->tags_getListUser();
+            $filteredTags = array_filter($tags, function ($tag) {
+                // Only include checksum tags.
+                if ('checksum:' === substr($tag, 0, strlen('checksum:'))) {
+                    return $tag;
+                }
+                return false;
+            });
+            return $filteredTags;
         });
 
-        foreach ($tags as $tag) {
-            // Ignore non-checksum tags.
-            if ('checksum:' !== substr($tag, 0, strlen('checksum:'))) {
-                continue;
-            }
+        foreach ($tags as $tagIndex => $tag) {
             // Find photos with this tag.
             $search = $flickr->getFlickr()->photos()->search(['tags' => $tag]);
             // If there are multiple, redirect to the comparison page.
@@ -98,6 +103,13 @@ class FlickrDupesController extends ControllerBase
                     'id2' => $search['photo'][1]['id'],
                 ]);
             }
+            // If there's only one search result, remove this tag from the cache.
+            $cache->delete($cacheKey);
+            $cache->get($cacheKey, function (ItemInterface $item) use ($tags, $tagIndex) {
+                $item->expiresAfter(60 * 30);
+                unset($tags[$tagIndex]);
+                return $tags;
+            });
         }
     }
 

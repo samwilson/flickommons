@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "FlickrDash",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Adds some useful links to Flickr.",
   "content_scripts": [
     {
